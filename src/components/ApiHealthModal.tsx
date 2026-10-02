@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, CheckCircle2, AlertTriangle, X, RefreshCw, Key, ExternalLink, ShieldCheck, Database } from 'lucide-react';
+import { Activity, CheckCircle2, AlertTriangle, X, RefreshCw, Key, ExternalLink, Database } from 'lucide-react';
 
 interface ApiHealthModalProps {
   isOpen: boolean;
@@ -84,7 +84,7 @@ export const ApiHealthModal: React.FC<ApiHealthModalProps> = ({ isOpen, onClose 
           {loading && !healthData && (
             <div className="py-8 text-center text-slate-500 space-y-2">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-600" />
-              <p>Pinging LTA DataMall v2 and data.gov.sg endpoints...</p>
+              <p>Pinging URA DataService and LTA DataMall endpoints...</p>
             </div>
           )}
 
@@ -103,7 +103,7 @@ export const ApiHealthModal: React.FC<ApiHealthModalProps> = ({ isOpen, onClose 
               {/* Overall status banner */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${healthData.status === 'healthy' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full ${healthData.status.startsWith('healthy') ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                   <span className="font-bold text-slate-800 uppercase tracking-wide">
                     Status: {healthData.status}
                   </span>
@@ -113,92 +113,113 @@ export const ApiHealthModal: React.FC<ApiHealthModalProps> = ({ isOpen, onClose 
                 </span>
               </div>
 
-              {/* Vercel Environment Key Status */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5 text-amber-600" />
-                    <span>GOV_ACCOUNT_KEY</span>
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${healthData.environment?.govAccountKeyConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                    {healthData.environment?.govAccountKeyConfigured ? 'CONFIGURED' : 'PENDING USER INPUT'}
-                  </span>
+              {/* Vercel Environment Keys Status */}
+              <div className="space-y-2">
+                {/* URA_ACCOUNT_KEY */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-blue-600" />
+                      <span>URA_ACCOUNT_KEY</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${healthData.environment?.uraAccountKeyConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {healthData.environment?.uraAccountKeyConfigured ? 'CONFIGURED' : 'PENDING VERCEL ENV'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    {healthData.environment?.uraAccountKeyConfigured
+                      ? `Key active (${healthData.environment.uraKeyMasked}). Live URA + HDB lot queries enabled.`
+                      : 'Add URA_ACCOUNT_KEY in your Vercel Environment Variables to query live URA lot feeds.'}
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  {healthData.environment?.govAccountKeyConfigured
-                    ? `Key active (${healthData.environment.keyMasked}). Direct government streaming enabled.`
-                    : 'Add GOV_ACCOUNT_KEY in your Vercel project environment variables to stream live data.'}
-                </p>
+
+                {/* GOV_ACCOUNT_KEY */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-amber-600" />
+                      <span>GOV_ACCOUNT_KEY</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${healthData.environment?.govAccountKeyConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {healthData.environment?.govAccountKeyConfigured ? 'CONFIGURED' : 'PENDING VERCEL ENV'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    {healthData.environment?.govAccountKeyConfigured
+                      ? `Key active (${healthData.environment.govKeyMasked}). Live EV batch data enabled.`
+                      : 'Add GOV_ACCOUNT_KEY in your Vercel Environment Variables for live LTA EVCBatch.'}
+                  </p>
+                </div>
               </div>
 
               {/* 3 Configured Endpoints Breakdown */}
               <div className="space-y-2">
                 <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500">
-                  Configured Government Data Feeds
+                  Configured API Feeds
                 </span>
 
-                {/* 1. LTA CarParkAvailabilityv2 */}
-                <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                      <Database className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>1. CarParkAvailabilityv2</span>
-                    </span>
-                    <span className="font-mono text-[10px] text-slate-500">
-                      {healthData.endpoints?.carParkAvailabilityv2?.latencyMs}ms
-                    </span>
-                  </div>
-                  <p className="font-mono text-[10px] text-slate-500 truncate">
-                    {healthData.endpoints?.carParkAvailabilityv2?.url}
-                  </p>
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium pt-0.5">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    <span className="text-slate-600">
-                      Status: {healthData.endpoints?.carParkAvailabilityv2?.status} (HTTP {healthData.endpoints?.carParkAvailabilityv2?.httpCode || 200})
-                    </span>
-                  </div>
-                </div>
-
-                {/* 2. data.gov.sg HDB Carpark Info */}
+                {/* 1. URA Car_Park_Availability */}
                 <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-800 flex items-center gap-1.5">
                       <Database className="w-3.5 h-3.5 text-blue-600" />
-                      <span>2. HDB Carpark Information</span>
+                      <span>1. URA Car_Park_Availability (Live Lots)</span>
                     </span>
                     <span className="font-mono text-[10px] text-slate-500">
-                      {healthData.endpoints?.hdbCarparkInfo?.latencyMs}ms
+                      {healthData.endpoints?.uraCarParkAvailability?.latencyMs}ms
                     </span>
                   </div>
                   <p className="font-mono text-[10px] text-slate-500 truncate">
-                    d_23f946fa557947f93a8043bbef41dd09
+                    {healthData.endpoints?.uraCarParkAvailability?.url}
                   </p>
                   <div className="flex items-center gap-1.5 text-[11px] font-medium pt-0.5">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                     <span className="text-slate-600">
-                      Status: {healthData.endpoints?.hdbCarparkInfo?.status} (HTTP {healthData.endpoints?.hdbCarparkInfo?.httpCode || 200})
+                      Status: {healthData.endpoints?.uraCarParkAvailability?.status} (HTTP {healthData.endpoints?.uraCarParkAvailability?.httpCode || 200})
                     </span>
                   </div>
                 </div>
 
-                {/* 3. LTA EVCBatch EV Charging */}
+                {/* 2. URA Car_Park_Details */}
                 <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                      <Database className="w-3.5 h-3.5 text-amber-600" />
-                      <span>3. EVCBatch (EV Charging)</span>
+                      <Database className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>2. URA Car_Park_Details (Rates & Capacity)</span>
                     </span>
                     <span className="font-mono text-[10px] text-slate-500">
-                      {healthData.endpoints?.evcBatch?.latencyMs}ms
+                      {healthData.endpoints?.uraCarParkDetails?.latencyMs}ms
                     </span>
                   </div>
                   <p className="font-mono text-[10px] text-slate-500 truncate">
-                    {healthData.endpoints?.evcBatch?.url}
+                    {healthData.endpoints?.uraCarParkDetails?.url}
                   </p>
                   <div className="flex items-center gap-1.5 text-[11px] font-medium pt-0.5">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                     <span className="text-slate-600">
-                      Status: {healthData.endpoints?.evcBatch?.status} (HTTP {healthData.endpoints?.evcBatch?.httpCode || 200})
+                      Status: {healthData.endpoints?.uraCarParkDetails?.status} (HTTP {healthData.endpoints?.uraCarParkDetails?.httpCode || 200})
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. LTA EVCBatch */}
+                <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-amber-600" />
+                      <span>3. LTA EVCBatch (EV Charging)</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-500">
+                      {healthData.endpoints?.ltaEvcBatch?.latencyMs}ms
+                    </span>
+                  </div>
+                  <p className="font-mono text-[10px] text-slate-500 truncate">
+                    {healthData.endpoints?.ltaEvcBatch?.url}
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium pt-0.5">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span className="text-slate-600">
+                      Status: {healthData.endpoints?.ltaEvcBatch?.status} (HTTP {healthData.endpoints?.ltaEvcBatch?.httpCode || 200})
                     </span>
                   </div>
                 </div>

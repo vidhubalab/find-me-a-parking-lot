@@ -1,55 +1,63 @@
 /**
- * Aggregated ParkSG Carparks API Endpoint
+ * Unified ParkSG Carparks Aggregator Endpoint
  * Merges:
- * 1. LTA CarParkAvailabilityv2
- * 2. data.gov.sg HDB Carpark Info
- * 3. LTA EVCBatch EV Charging Stations
+ * 1. URA Live Car_Park_Availability (HDB + LTA + URA): https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Availability
+ * 2. URA Car_Park_Details: https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details
+ * 3. LTA EVCBatch: https://datamall2.mytransport.sg/ltaodataservice/EVCBatch
  */
 
+import { getUraToken } from './ura-token.js';
+
 export default async function handler(req, res) {
+  const uraAccessKey = process.env.URA_ACCOUNT_KEY || process.env.URA_ACCESS_KEY || '';
   const govAccountKey = process.env.GOV_ACCOUNT_KEY || process.env.LTA_DATAMALL_KEY || '';
-  const areaFilter = req.query?.area; // e.g. 'Orchard', 'Marina', etc.
+  const areaFilter = req.query?.area;
 
   let liveLotsMap = new Map();
   let liveLotsCount = 0;
   let dataSource = 'static_fallback';
 
-  // 1. Fetch live lots from LTA if key is configured
-  if (govAccountKey && govAccountKey !== 'MY_LTA_DATAMALL_KEY') {
+  // 1. Fetch live lots from URA DataService if URA_ACCOUNT_KEY is configured
+  if (uraAccessKey && uraAccessKey !== 'MY_URA_ACCOUNT_KEY') {
     try {
-      const resp = await fetch('https://datamall2.mytransport.sg/ltaodataservice/CarParkAvailabilityv2', {
-        headers: {
-          AccountKey: govAccountKey,
-          accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(5000),
+      const token = await getUraToken();
+      const headers = {
+        'AccessKey': uraAccessKey,
+        'User-Agent': 'ParkSG-Aggregator/1.0',
+      };
+      if (token) {
+        headers['Token'] = token;
+      }
+
+      const uraResp = await fetch('https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Availability', {
+        headers,
+        signal: AbortSignal.timeout(6000),
       });
 
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json.value && Array.isArray(json.value)) {
-          dataSource = 'lta_datamall2_live';
-          liveLotsCount = json.value.length;
-          json.value.forEach((item) => {
-            if (item.Development) {
-              const cleanName = item.Development.toLowerCase().trim();
-              liveLotsMap.set(cleanName, item.AvailableLots);
-              if (item.CarParkID) {
-                liveLotsMap.set(`id_${item.CarParkID}`, item.AvailableLots);
-              }
+      if (uraResp.ok) {
+        const json = await uraResp.json();
+        if (json.Status === 'Success' && Array.isArray(json.Result)) {
+          dataSource = 'ura_dataservice_live';
+          liveLotsCount = json.Result.length;
+          json.Result.forEach((item) => {
+            if (item.carparkNo) {
+              const lots = parseInt(item.lotsAvailable || '0', 10);
+              liveLotsMap.set(item.carparkNo.toLowerCase(), lots);
+              liveLotsMap.set(`cp_${item.carparkNo.toLowerCase()}`, lots);
             }
           });
         }
       }
     } catch (err) {
-      console.warn('[ParkSG API] Failed querying live LTA lots:', err.message);
+      console.warn('[ParkSG Aggregator] URA live query failed:', err.message);
     }
   }
 
-  // Baseline curated dataset for Singapore's high-demand hubs
+  // Curated baseline dataset matching Singapore hubs
   const curatedCarparks = [
     {
       id: 'orchard-ion',
+      uraCode: 'N0006',
       name: 'ION Orchard Carpark',
       hub: 'Orchard',
       address: '2 Orchard Turn, Singapore 238801',
@@ -57,7 +65,7 @@ export default async function handler(req, res) {
       latitude: 1.3040,
       longitude: 103.8318,
       totalLots: 560,
-      availableLots: liveLotsMap.get('ion orchard') ?? liveLotsMap.get('id_orchard-ion') ?? 38,
+      availableLots: liveLotsMap.get('n0006') ?? liveLotsMap.get('orchard-ion') ?? 38,
       trend: 'filling',
       historicalCrowd: 'heavy',
       isSheltered: true,
@@ -83,6 +91,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'orchard-wisma',
+      uraCode: 'S0108',
       name: 'Wisma Atria',
       hub: 'Orchard',
       address: '435 Orchard Road, Singapore 238877',
@@ -90,7 +99,7 @@ export default async function handler(req, res) {
       latitude: 1.3038,
       longitude: 103.8333,
       totalLots: 240,
-      availableLots: liveLotsMap.get('wisma atria') ?? 124,
+      availableLots: liveLotsMap.get('s0108') ?? 124,
       trend: 'stable',
       historicalCrowd: 'moderate',
       isSheltered: true,
@@ -116,6 +125,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'orchard-takashimaya',
+      uraCode: 'A0004',
       name: 'Ngee Ann City (Takashimaya)',
       hub: 'Orchard',
       address: '391 Orchard Road, Singapore 238873',
@@ -123,7 +133,7 @@ export default async function handler(req, res) {
       latitude: 1.3025,
       longitude: 103.8344,
       totalLots: 780,
-      availableLots: liveLotsMap.get('ngee ann city') ?? liveLotsMap.get('takashimaya') ?? 285,
+      availableLots: liveLotsMap.get('a0004') ?? 285,
       trend: 'stable',
       historicalCrowd: 'moderate',
       isSheltered: true,
@@ -149,6 +159,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'orchard-paragon',
+      uraCode: 'J0012',
       name: 'Paragon Shopping Centre',
       hub: 'Orchard',
       address: '290 Orchard Road, Singapore 238859',
@@ -156,7 +167,7 @@ export default async function handler(req, res) {
       latitude: 1.3039,
       longitude: 103.8358,
       totalLots: 420,
-      availableLots: liveLotsMap.get('paragon') ?? 8,
+      availableLots: liveLotsMap.get('j0012') ?? 8,
       trend: 'filling',
       historicalCrowd: 'critical',
       isSheltered: true,
@@ -182,6 +193,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'marina-mbs',
+      uraCode: 'M0045',
       name: 'Marina Bay Sands (Central)',
       hub: 'Marina',
       address: '10 Bayfront Avenue, Singapore 018956',
@@ -189,7 +201,7 @@ export default async function handler(req, res) {
       latitude: 1.2834,
       longitude: 103.8607,
       totalLots: 2450,
-      availableLots: liveLotsMap.get('marina bay sands') ?? 42,
+      availableLots: liveLotsMap.get('m0045') ?? 42,
       trend: 'filling',
       historicalCrowd: 'heavy',
       isSheltered: true,
@@ -215,6 +227,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'marina-suntec',
+      uraCode: 'S0033',
       name: 'Suntec City Mall',
       hub: 'Marina',
       address: '3 Temasek Boulevard, Singapore 038983',
@@ -222,7 +235,7 @@ export default async function handler(req, res) {
       latitude: 1.2935,
       longitude: 103.8572,
       totalLots: 3100,
-      availableLots: liveLotsMap.get('suntec city') ?? liveLotsMap.get('id_1') ?? 840,
+      availableLots: liveLotsMap.get('s0033') ?? 840,
       trend: 'stable',
       historicalCrowd: 'light',
       isSheltered: true,
@@ -248,6 +261,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'hf-vivocity',
+      uraCode: 'V0088',
       name: 'VivoCity Multi-Storey & Basement',
       hub: 'HarbourFront',
       address: '1 HarbourFront Walk, Singapore 098585',
@@ -255,7 +269,7 @@ export default async function handler(req, res) {
       latitude: 1.2642,
       longitude: 103.8223,
       totalLots: 2180,
-      availableLots: liveLotsMap.get('vivocity') ?? 19,
+      availableLots: liveLotsMap.get('v0088') ?? 19,
       trend: 'filling',
       historicalCrowd: 'critical',
       isSheltered: true,
@@ -281,6 +295,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'jld-jem',
+      uraCode: 'J0022',
       name: 'JEM Shopping Mall',
       hub: 'JurongLake',
       address: '50 Jurong Gateway Road, Singapore 608549',
@@ -288,7 +303,7 @@ export default async function handler(req, res) {
       latitude: 1.3331,
       longitude: 103.7436,
       totalLots: 720,
-      availableLots: liveLotsMap.get('jem') ?? 31,
+      availableLots: liveLotsMap.get('j0022') ?? 31,
       trend: 'filling',
       historicalCrowd: 'heavy',
       isSheltered: true,
@@ -314,6 +329,7 @@ export default async function handler(req, res) {
     },
     {
       id: 'jld-imm',
+      uraCode: 'I0015',
       name: 'IMM Building (First 2 Hr Special)',
       hub: 'JurongLake',
       address: '2 Jurong East Street 21, Singapore 609601',
@@ -321,7 +337,7 @@ export default async function handler(req, res) {
       latitude: 1.3349,
       longitude: 103.7468,
       totalLots: 1350,
-      availableLots: liveLotsMap.get('imm') ?? 520,
+      availableLots: liveLotsMap.get('i0015') ?? 520,
       trend: 'emptying',
       historicalCrowd: 'light',
       isSheltered: true,

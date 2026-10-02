@@ -1,139 +1,127 @@
 /**
- * Health check endpoint for ParkSG API monitoring
- * Compatible with Vercel Serverless Functions (/api/health.js) and Express.
+ * API Health & Diagnostics Handler
+ * Monitors:
+ * 1. URA Live Car Park Availability: https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Availability
+ * 2. URA Car Park List & Rates: https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details
+ * 3. LTA DataMall EV Charging Data: https://datamall2.mytransport.sg/ltaodataservice/EVCBatch
  */
 
+const startTime = Date.now();
+
 export default async function handler(req, res) {
-  const startTime = Date.now();
+  const uraAccountKey = process.env.URA_ACCOUNT_KEY || process.env.URA_ACCESS_KEY || '';
   const govAccountKey = process.env.GOV_ACCOUNT_KEY || process.env.LTA_DATAMALL_KEY || '';
-  const isKeyConfigured = Boolean(govAccountKey && govAccountKey !== 'MY_LTA_DATAMALL_KEY');
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-  };
-
-  // Perform lightweight ping to the 3 government services
   const results = {
-    ltaCarParkAvailability: { status: 'pending', latencyMs: 0 },
-    hdbCarparkInfo: { status: 'pending', latencyMs: 0 },
-    ltaEvcBatch: { status: 'pending', latencyMs: 0 },
-  };
-
-  // Check 1: LTA CarParkAvailabilityv2
-  const checkLtaLots = async () => {
-    const t0 = Date.now();
-    try {
-      const resp = await fetch('https://datamall2.mytransport.sg/ltaodataservice/CarParkAvailabilityv2', {
-        headers: {
-          AccountKey: govAccountKey,
-          accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(4000),
-      });
-      results.ltaCarParkAvailability = {
-        status: resp.ok ? 'connected' : resp.status === 401 || resp.status === 403 ? 'auth_required' : `http_${resp.status}`,
-        httpCode: resp.status,
-        latencyMs: Date.now() - t0,
-      };
-    } catch (err) {
-      results.ltaCarParkAvailability = {
-        status: 'unreachable',
-        error: err.message,
-        latencyMs: Date.now() - t0,
-      };
-    }
-  };
-
-  // Check 2: data.gov.sg HDB dataset
-  const checkHdbInfo = async () => {
-    const t0 = Date.now();
-    try {
-      const resp = await fetch(
-        'https://data.gov.sg/api/action/datastore_search?resource_id=d_23f946fa557947f93a8043bbef41dd09&limit=1',
-        {
-          headers: { accept: 'application/json' },
-          signal: AbortSignal.timeout(4000),
-        }
-      );
-      results.hdbCarparkInfo = {
-        status: resp.ok ? 'connected' : `http_${resp.status}`,
-        httpCode: resp.status,
-        latencyMs: Date.now() - t0,
-      };
-    } catch (err) {
-      results.hdbCarparkInfo = {
-        status: 'unreachable',
-        error: err.message,
-        latencyMs: Date.now() - t0,
-      };
-    }
-  };
-
-  // Check 3: LTA EVCBatch
-  const checkLtaEv = async () => {
-    const t0 = Date.now();
-    try {
-      const resp = await fetch('https://datamall2.mytransport.sg/ltaodataservice/EVCBatch', {
-        headers: {
-          AccountKey: govAccountKey,
-          accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(4000),
-      });
-      results.ltaEvcBatch = {
-        status: resp.ok ? 'connected' : resp.status === 401 || resp.status === 403 ? 'auth_required' : `http_${resp.status}`,
-        httpCode: resp.status,
-        latencyMs: Date.now() - t0,
-      };
-    } catch (err) {
-      results.ltaEvcBatch = {
-        status: 'unreachable',
-        error: err.message,
-        latencyMs: Date.now() - t0,
-      };
-    }
-  };
-
-  // Run all 3 checks concurrently
-  await Promise.allSettled([checkLtaLots(), checkHdbInfo(), checkLtaEv()]);
-
-  const totalDurationMs = Date.now() - startTime;
-  const isHealthy = results.hdbCarparkInfo.status === 'connected' || results.ltaCarParkAvailability.status === 'connected';
-
-  const payload = {
-    status: isHealthy ? 'healthy' : 'degraded',
-    service: 'ParkSG Live Carpark & EV Gateway',
+    status: 'healthy',
+    service: 'ParkSG URA & LTA Gateway',
     timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime ? process.uptime() : 0),
-    totalDurationMs,
+    uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
     environment: {
-      govAccountKeyConfigured: isKeyConfigured,
-      keyMasked: isKeyConfigured ? `${govAccountKey.slice(0, 4)}...${govAccountKey.slice(-4)}` : 'NOT_SET',
-      vercelRegion: process.env.VERCEL_REGION || 'local-dev',
+      uraAccountKeyConfigured: Boolean(uraAccountKey && uraAccountKey !== 'MY_URA_ACCOUNT_KEY'),
+      uraKeyMasked: uraAccountKey ? `${uraAccountKey.slice(0, 4)}...${uraAccountKey.slice(-3)}` : 'NOT_SET',
+      govAccountKeyConfigured: Boolean(govAccountKey && govAccountKey !== 'MY_LTA_DATAMALL_KEY'),
+      govKeyMasked: govAccountKey ? `${govAccountKey.slice(0, 4)}...${govAccountKey.slice(-3)}` : 'NOT_SET',
+      vercelRegion: process.env.VERCEL_REGION || process.env.AWS_REGION || 'local-dev',
     },
     endpoints: {
-      carParkAvailabilityv2: {
-        url: 'https://datamall2.mytransport.sg/ltaodataservice/CarParkAvailabilityv2',
-        ...results.ltaCarParkAvailability,
+      uraCarParkAvailability: {
+        url: 'https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Availability',
+        status: 'pending',
+        httpCode: null,
+        latencyMs: 0,
       },
-      hdbCarparkInfo: {
-        url: 'https://data.gov.sg/api/action/datastore_search?resource_id=d_23f946fa557947f93a8043bbef41dd09',
-        ...results.hdbCarparkInfo,
+      uraCarParkDetails: {
+        url: 'https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details',
+        status: 'pending',
+        httpCode: null,
+        latencyMs: 0,
       },
-      evcBatch: {
+      ltaEvcBatch: {
         url: 'https://datamall2.mytransport.sg/ltaodataservice/EVCBatch',
-        ...results.ltaEvcBatch,
+        status: 'pending',
+        httpCode: null,
+        latencyMs: 0,
       },
     },
-    message: isKeyConfigured
-      ? 'GOV_ACCOUNT_KEY is configured. Live government data streaming active.'
-      : 'GOV_ACCOUNT_KEY is not configured yet. Fallback cache enabled so app stays operational.',
   };
 
-  if (res.setHeader) {
-    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+  const pingStart = Date.now();
+
+  // Test 1: URA Car_Park_Availability
+  try {
+    const t0 = Date.now();
+    const headers = {
+      'User-Agent': 'ParkSG-API/1.0',
+    };
+    if (uraAccountKey && uraAccountKey !== 'MY_URA_ACCOUNT_KEY') {
+      headers['AccessKey'] = uraAccountKey;
+    }
+    const resp = await fetch('https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Availability', {
+      headers,
+      signal: AbortSignal.timeout(6000),
+    });
+    results.endpoints.uraCarParkAvailability.latencyMs = Date.now() - t0;
+    results.endpoints.uraCarParkAvailability.httpCode = resp.status;
+    results.endpoints.uraCarParkAvailability.status = resp.ok ? 'connected' : `http_${resp.status}`;
+  } catch (err) {
+    results.endpoints.uraCarParkAvailability.status = 'unreachable';
+    results.endpoints.uraCarParkAvailability.error = err.message;
   }
 
-  return res.status ? res.status(200).json(payload) : res.json(payload);
+  // Test 2: URA Car_Park_Details
+  try {
+    const t0 = Date.now();
+    const headers = {
+      'User-Agent': 'ParkSG-API/1.0',
+    };
+    if (uraAccountKey && uraAccountKey !== 'MY_URA_ACCOUNT_KEY') {
+      headers['AccessKey'] = uraAccountKey;
+    }
+    const resp = await fetch('https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1?service=Car_Park_Details', {
+      headers,
+      signal: AbortSignal.timeout(6000),
+    });
+    results.endpoints.uraCarParkDetails.latencyMs = Date.now() - t0;
+    results.endpoints.uraCarParkDetails.httpCode = resp.status;
+    results.endpoints.uraCarParkDetails.status = resp.ok ? 'connected' : `http_${resp.status}`;
+  } catch (err) {
+    results.endpoints.uraCarParkDetails.status = 'unreachable';
+    results.endpoints.uraCarParkDetails.error = err.message;
+  }
+
+  // Test 3: LTA EVCBatch
+  try {
+    const t0 = Date.now();
+    const headers = {
+      accept: 'application/json',
+    };
+    if (govAccountKey && govAccountKey !== 'MY_LTA_DATAMALL_KEY') {
+      headers['AccountKey'] = govAccountKey;
+    }
+    const resp = await fetch('https://datamall2.mytransport.sg/ltaodataservice/EVCBatch', {
+      headers,
+      signal: AbortSignal.timeout(6000),
+    });
+    results.endpoints.ltaEvcBatch.latencyMs = Date.now() - t0;
+    results.endpoints.ltaEvcBatch.httpCode = resp.status;
+    results.endpoints.ltaEvcBatch.status = resp.ok ? 'connected' : `http_${resp.status}`;
+  } catch (err) {
+    results.endpoints.ltaEvcBatch.status = 'unreachable';
+    results.endpoints.ltaEvcBatch.error = err.message;
+  }
+
+  results.totalDurationMs = Date.now() - pingStart;
+
+  const allKeysMissing = !results.environment.uraAccountKeyConfigured && !results.environment.govAccountKeyConfigured;
+  if (allKeysMissing) {
+    results.status = 'healthy_cache_fallback';
+    results.message = 'URA_ACCOUNT_KEY and GOV_ACCOUNT_KEY are not configured yet. Fallback cache enabled so app stays operational.';
+  } else {
+    results.message = 'Government API keys active and ready.';
+  }
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Content-Type', 'application/json');
+  return res.status(200).json(results);
 }

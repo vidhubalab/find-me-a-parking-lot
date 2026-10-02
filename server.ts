@@ -11,9 +11,10 @@ const __dirname = path.dirname(__filename);
 // Import API handlers directly from the /api folder
 import healthHandler from './api/health.js';
 import liveLotsHandler from './api/live-lots.js';
-import hdbInfoHandler from './api/hdb-info.js';
+import carParkDetailsHandler from './api/car-park-details.js';
 import evChargingHandler from './api/ev-charging.js';
 import carparksHandler from './api/carparks.js';
+import uraTokenHandler from './api/ura-token.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -25,12 +26,12 @@ app.all(['/api/health', '/api/health.js'], (req: Request, res: Response) => {
   return healthHandler(req, res);
 });
 
-app.all(['/api/live-lots', '/api/live-lots.js'], (req: Request, res: Response) => {
+app.all(['/api/live-lots', '/api/live-lots.js', '/api/ura-availability', '/api/ura-availability.js'], (req: Request, res: Response) => {
   return liveLotsHandler(req, res);
 });
 
-app.all(['/api/hdb-info', '/api/hdb-info.js'], (req: Request, res: Response) => {
-  return hdbInfoHandler(req, res);
+app.all(['/api/car-park-details', '/api/car-park-details.js', '/api/ura-details', '/api/ura-details.js'], (req: Request, res: Response) => {
+  return carParkDetailsHandler(req, res);
 });
 
 app.all(['/api/ev-charging', '/api/ev-charging.js'], (req: Request, res: Response) => {
@@ -39,6 +40,10 @@ app.all(['/api/ev-charging', '/api/ev-charging.js'], (req: Request, res: Respons
 
 app.all(['/api/carparks', '/api/carparks.js'], (req: Request, res: Response) => {
   return carparksHandler(req, res);
+});
+
+app.all(['/api/ura-token', '/api/ura-token.js'], (req: Request, res: Response) => {
+  return uraTokenHandler(req, res);
 });
 
 async function startServer() {
