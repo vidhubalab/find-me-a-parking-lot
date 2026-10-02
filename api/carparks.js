@@ -295,7 +295,20 @@ export default async function handler(req, res) {
   let combined = [...commercialAnchors, ...processedHdbCarparks];
 
   if (areaFilter && areaFilter !== 'All') {
-    combined = combined.filter((c) => c.hub.toLowerCase() === areaFilter.toLowerCase());
+    const filterLower = areaFilter.toLowerCase();
+    if (filterLower === 'cbd') {
+      combined = combined.filter((c) => ['cbd', 'orchard', 'marina', 'bugis'].includes(c.hub.toLowerCase()));
+    } else if (filterLower === 'north') {
+      combined = combined.filter((c) => ['north', 'northeast'].includes(c.hub.toLowerCase()));
+    } else if (filterLower === 'east') {
+      combined = combined.filter((c) => c.hub.toLowerCase() === 'east');
+    } else if (filterLower === 'west') {
+      combined = combined.filter((c) => ['west', 'juronglake'].includes(c.hub.toLowerCase()));
+    } else if (filterLower === 'central') {
+      combined = combined.filter((c) => ['central', 'harbourfront'].includes(c.hub.toLowerCase()));
+    } else {
+      combined = combined.filter((c) => c.hub.toLowerCase() === filterLower);
+    }
   }
 
   if (searchFilter) {

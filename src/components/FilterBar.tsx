@@ -18,17 +18,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   carparkCount,
 }) => {
   const hubs: { id: HubZone; label: string }[] = [
-    { id: 'All', label: '🇸🇬 All Singapore' },
-    { id: 'Orchard', label: 'Orchard' },
-    { id: 'Marina', label: 'Marina Bay' },
-    { id: 'CBD', label: 'CBD / Downtown' },
-    { id: 'Bugis', label: 'Bugis' },
-    { id: 'East', label: 'East' },
+    { id: 'All', label: 'All Singapore' },
+    { id: 'CBD', label: 'CBD' },
     { id: 'North', label: 'North' },
-    { id: 'NorthEast', label: 'North-East' },
+    { id: 'East', label: 'East' },
     { id: 'West', label: 'West' },
     { id: 'Central', label: 'Central' },
-    { id: 'HarbourFront', label: 'HarbourFront' },
   ];
 
   const activeFilterCount =

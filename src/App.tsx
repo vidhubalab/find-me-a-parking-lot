@@ -219,9 +219,21 @@ export default function App() {
   const filteredCarparks = useMemo(() => {
     return carparks
       .filter((cp) => {
-        // Hub filter
-        if (filters.hub !== 'All' && cp.hub !== filters.hub) {
-          return false;
+        // Hub filter (4 regions + CBD + All Singapore)
+        if (filters.hub !== 'All') {
+          if (filters.hub === 'CBD') {
+            if (!['CBD', 'Orchard', 'Marina', 'Bugis'].includes(cp.hub)) return false;
+          } else if (filters.hub === 'North') {
+            if (!['North', 'NorthEast'].includes(cp.hub)) return false;
+          } else if (filters.hub === 'East') {
+            if (cp.hub !== 'East') return false;
+          } else if (filters.hub === 'West') {
+            if (!['West', 'JurongLake'].includes(cp.hub)) return false;
+          } else if (filters.hub === 'Central') {
+            if (!['Central', 'HarbourFront'].includes(cp.hub)) return false;
+          } else if (cp.hub !== filters.hub) {
+            return false;
+          }
         }
 
         // Search query filter
