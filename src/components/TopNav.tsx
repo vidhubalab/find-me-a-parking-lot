@@ -26,7 +26,7 @@ export const TopNav: React.FC<TopNavProps> = ({
         {/* Zone 1: Single text element wordmark */}
         <button
           type="button"
-          onClick={() => setActiveTab('hud')}
+          onClick={() => setActiveTab('explorer')}
           className="text-base sm:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2 text-left"
         >
           <span>ParkSG Live</span>
@@ -40,17 +40,6 @@ export const TopNav: React.FC<TopNavProps> = ({
         <nav className="flex items-center gap-1 sm:gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('hud')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'hud'
-                ? 'bg-slate-100 text-emerald-700 shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            HUD Driver
-          </button>
-          <button
-            type="button"
             onClick={() => setActiveTab('explorer')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'explorer'
@@ -59,6 +48,17 @@ export const TopNav: React.FC<TopNavProps> = ({
             }`}
           >
             Find Lots
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('hud')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              activeTab === 'hud'
+                ? 'bg-slate-100 text-emerald-700 shadow-sm font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            Live Navigation
           </button>
           <button
             type="button"

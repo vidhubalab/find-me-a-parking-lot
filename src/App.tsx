@@ -18,8 +18,8 @@ export default function App() {
   // Main carpark dataset with live simulated fluctuation
   const [carparks, setCarparks] = useState<Carpark[]>(INITIAL_CARPARKS);
 
-  // Active top navigation tab
-  const [activeTab, setActiveTab] = useState<'hud' | 'explorer' | 'watch' | 'radar'>('hud');
+  // Active top navigation tab (defaults to Find Lots)
+  const [activeTab, setActiveTab] = useState<'hud' | 'explorer' | 'watch' | 'radar'>('explorer');
 
   // Filter drawer open state
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -318,14 +318,16 @@ export default function App() {
         onOpenApiHealth={() => setIsApiHealthOpen(true)}
       />
 
-      {/* Sub-header Filter Bar (always accessible for personalised search) */}
-      <FilterBar
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        isOpen={isFilterOpen}
-        onToggleOpen={() => setIsFilterOpen(!isFilterOpen)}
-        carparkCount={filteredCarparks.length}
-      />
+      {/* Regional Filter Bar & Headers (displayed only in Find Lots tab) */}
+      {activeTab === 'explorer' && (
+        <FilterBar
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          isOpen={isFilterOpen}
+          onToggleOpen={() => setIsFilterOpen(!isFilterOpen)}
+          carparkCount={filteredCarparks.length}
+        />
+      )}
 
       {/* Main Tab Views */}
       <main className="flex-1 w-full">

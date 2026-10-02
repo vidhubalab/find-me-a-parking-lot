@@ -189,10 +189,10 @@ export const DriverHud: React.FC<DriverHudProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping" />
               <span className="text-xs font-bold uppercase tracking-widest text-emerald-800">
-                Live Driver Cockpit
+                Live Navigation & Co-Pilot
               </span>
               <span className="text-slate-300">·</span>
-              <span className="text-xs text-slate-600 font-semibold">{primary.hub} Hub</span>
+              <span className="text-xs text-slate-600 font-semibold">{primary.town ? `${primary.town} · ${primary.hub}` : primary.hub}</span>
             </div>
 
             {/* Voice Status indicator */}
