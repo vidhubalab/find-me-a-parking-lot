@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 // Import API handlers directly from the /api folder
 import healthHandler from './api/health.js';
 import liveLotsHandler from './api/live-lots.js';
+import hdbInfoHandler from './api/hdb-info.js';
+import hdbAvailabilityHandler from './api/hdb-availability.js';
 import carParkDetailsHandler from './api/car-park-details.js';
 import evChargingHandler from './api/ev-charging.js';
 import carparksHandler from './api/carparks.js';
@@ -24,6 +26,14 @@ app.use(express.json());
 // API Routes
 app.all(['/api/health', '/api/health.js'], (req: Request, res: Response) => {
   return healthHandler(req, res);
+});
+
+app.all(['/api/hdb-info', '/api/hdb-info.js'], (req: Request, res: Response) => {
+  return hdbInfoHandler(req, res);
+});
+
+app.all(['/api/hdb-availability', '/api/hdb-availability.js'], (req: Request, res: Response) => {
+  return hdbAvailabilityHandler(req, res);
 });
 
 app.all(['/api/live-lots', '/api/live-lots.js', '/api/ura-availability', '/api/ura-availability.js'], (req: Request, res: Response) => {

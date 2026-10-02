@@ -88,20 +88,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.carparks && Array.isArray(data.carparks) && data.carparks.length > 0) {
-            setCarparks((prev) => {
-              const liveMap = new Map<string, number>(data.carparks.map((c: Carpark) => [c.id, c.availableLots]));
-              return prev.map((cp) => {
-                if (liveMap.has(cp.id)) {
-                  const newLots = liveMap.get(cp.id) as number;
-                  return {
-                    ...cp,
-                    availableLots: newLots,
-                    trend: newLots < cp.availableLots ? 'filling' : newLots > cp.availableLots ? 'emptying' : 'stable',
-                  };
-                }
-                return cp;
-              });
-            });
+            setCarparks(data.carparks);
           }
         }
       } catch {
