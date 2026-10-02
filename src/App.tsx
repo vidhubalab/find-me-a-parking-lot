@@ -1,0 +1,452 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { INITIAL_CARPARKS, HUB_DETAILS } from './data/singaporeCarparks';
+import { Carpark, FilterPreferences, TrackedSlots, TripSimulationState, HubZone } from './types/carpark';
+import { voiceAlertService } from './services/voiceAlertService';
+import { TopNav } from './components/TopNav';
+import { FilterBar } from './components/FilterBar';
+import { DriverHud } from './components/DriverHud';
+import { CarparkExplorer } from './components/CarparkExplorer';
+import { WatchCompanion } from './components/WatchCompanion';
+import { RadarView } from './components/RadarView';
+import { CarparkDetailModal } from './components/CarparkDetailModal';
+import { ApiHealthModal } from './components/ApiHealthModal';
+import { VoiceAlertBanner } from './components/VoiceAlertBanner';
+import { Compass, Volume2, Shield, Sparkles } from 'lucide-react';
+
+export default function App() {
+  // Main carpark dataset with live simulated fluctuation
+  const [carparks, setCarparks] = useState<Carpark[]>(INITIAL_CARPARKS);
+
+  // Active top navigation tab
+  const [activeTab, setActiveTab] = useState<'hud' | 'explorer' | 'watch' | 'radar'>('hud');
+
+  // Filter drawer open state
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  // Detail modal selection
+  const [selectedCarparkForDetail, setSelectedCarparkForDetail] = useState<Carpark | null>(null);
+
+  // Government API Health modal state
+  const [isApiHealthOpen, setIsApiHealthOpen] = useState(false);
+
+  // Voice speech synthesis status
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [lastSpokenText, setLastSpokenText] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Filter preferences state
+  const [filters, setFilters] = useState<FilterPreferences>({
+    hub: 'Orchard',
+    searchQuery: '',
+    vehicleType: 'car',
+    vehicleHeightMeters: 1.9,
+    maxHourlyRate: 10,
+    shelteredOnly: false,
+    evChargingOnly: false,
+    accessibleLotsOnly: false,
+    sortBy: 'lots',
+  });
+
+  // Track up to 3 carparks simultaneously (Primary + 2 Backups)
+  const [trackedSlots, setTrackedSlots] = useState<TrackedSlots>({
+    primary: INITIAL_CARPARKS[0], // ION Orchard
+    backup1: INITIAL_CARPARKS[1], // Wisma Atria
+    backup2: INITIAL_CARPARKS[2], // Takashimaya
+  });
+
+  // Trip simulation state
+  const [tripState, setTripState] = useState<TripSimulationState>({
+    isNavigating: true,
+    destinationName: INITIAL_CARPARKS[0].name,
+    currentEtaMinutes: 12,
+    tenMinAlertTriggered: false,
+    lowLotAlertTriggered: false,
+    lastSpokenText: null,
+    isSpeaking: false,
+  });
+
+  // Subscribe to Voice Alert service events
+  useEffect(() => {
+    const unsubscribe = voiceAlertService.subscribe((speaking, text) => {
+      setIsSpeaking(speaking);
+      if (text) {
+        setLastSpokenText(text);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch live government carpark availability from /api/carparks
+  useEffect(() => {
+    const loadGovCarparks = async () => {
+      try {
+        const res = await fetch('/api/carparks');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.carparks && Array.isArray(data.carparks) && data.carparks.length > 0) {
+            setCarparks((prev) => {
+              const liveMap = new Map<string, number>(data.carparks.map((c: Carpark) => [c.id, c.availableLots]));
+              return prev.map((cp) => {
+                if (liveMap.has(cp.id)) {
+                  const newLots = liveMap.get(cp.id) as number;
+                  return {
+                    ...cp,
+                    availableLots: newLots,
+                    trend: newLots < cp.availableLots ? 'filling' : newLots > cp.availableLots ? 'emptying' : 'stable',
+                  };
+                }
+                return cp;
+              });
+            });
+          }
+        }
+      } catch {
+        // Silent fallback
+      }
+    };
+
+    loadGovCarparks();
+    const timer = setInterval(loadGovCarparks, 30000); // sync every 30s
+    return () => clearInterval(timer);
+  }, []);
+
+  // Update tracked slots whenever carparks list receives updated live lot numbers
+  useEffect(() => {
+    setTrackedSlots((prev) => {
+      const updatedPrimary = prev.primary ? carparks.find((c) => c.id === prev.primary?.id) || prev.primary : null;
+      const updatedBackup1 = prev.backup1 ? carparks.find((c) => c.id === prev.backup1?.id) || prev.backup1 : null;
+      const updatedBackup2 = prev.backup2 ? carparks.find((c) => c.id === prev.backup2?.id) || prev.backup2 : null;
+      return {
+        primary: updatedPrimary,
+        backup1: updatedBackup1,
+        backup2: updatedBackup2,
+      };
+    });
+  }, [carparks]);
+
+  // Periodic real-time lot fluctuation (simulating live LTA DataMall IoT sensor updates)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCarparks((prevCarparks) =>
+        prevCarparks.map((cp) => {
+          // 40% chance of small change (+/- 1 to 2 lots)
+          if (Math.random() > 0.6) {
+            const delta = Math.floor(Math.random() * 5) - 2; // -2 to +2
+            const newLots = Math.max(1, Math.min(cp.totalLots, cp.availableLots + delta));
+            const newTrend = delta < 0 ? 'filling' : delta > 0 ? 'emptying' : 'stable';
+            return {
+              ...cp,
+              availableLots: newLots,
+              trend: newTrend,
+            };
+          }
+          return cp;
+        })
+      );
+    }, 8000); // every 8 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // When user switches hub, update tracked slots to the top carparks in that hub
+  const handleHubQuickSwitch = useCallback((newHub: HubZone) => {
+    setFilters((prev) => ({ ...prev, hub: newHub }));
+    if (newHub !== 'All') {
+      const hubCarparks = carparks.filter((c) => c.hub === newHub);
+      if (hubCarparks.length > 0) {
+        setTrackedSlots({
+          primary: hubCarparks[0] || null,
+          backup1: hubCarparks[1] || null,
+          backup2: hubCarparks[2] || null,
+        });
+        voiceAlertService.speak(`Switched tracking destination to ${HUB_DETAILS[newHub].name}. Target is ${hubCarparks[0].name}.`, false);
+      }
+    }
+  }, [carparks]);
+
+  // Promote a backup slot to Primary
+  const handleSwapBackup = useCallback((backupSlot: 1 | 2) => {
+    setTrackedSlots((prev) => {
+      const currentPrimary = prev.primary;
+      const targetBackup = backupSlot === 1 ? prev.backup1 : prev.backup2;
+
+      if (!targetBackup) return prev;
+
+      voiceAlertService.speakBackupSwapped(targetBackup.name, targetBackup.availableLots);
+
+      if (backupSlot === 1) {
+        return {
+          primary: targetBackup,
+          backup1: currentPrimary,
+          backup2: prev.backup2,
+        };
+      } else {
+        return {
+          primary: targetBackup,
+          backup1: prev.backup1,
+          backup2: currentPrimary,
+        };
+      }
+    });
+
+    setTripState((prev) => ({
+      ...prev,
+      lowLotAlertTriggered: false, // Reset low lot trigger for new primary
+    }));
+  }, []);
+
+  // Set explicit carpark as Primary
+  const handleSetPrimary = useCallback((carpark: Carpark) => {
+    setTrackedSlots((prev) => ({
+      ...prev,
+      primary: carpark,
+    }));
+    setTripState((prev) => ({
+      ...prev,
+      destinationName: carpark.name,
+      lowLotAlertTriggered: false,
+    }));
+  }, []);
+
+  // Set explicit carpark as Backup 1 or 2
+  const handleSetBackup = useCallback((carpark: Carpark, slot: 1 | 2) => {
+    setTrackedSlots((prev) => {
+      if (slot === 1) {
+        return { ...prev, backup1: carpark };
+      } else {
+        return { ...prev, backup2: carpark };
+      }
+    });
+  }, []);
+
+  // Filter preferences update handler
+  const handleFilterChange = useCallback((newFilters: Partial<FilterPreferences>) => {
+    if (newFilters.hub !== undefined && newFilters.hub !== filters.hub) {
+      handleHubQuickSwitch(newFilters.hub);
+    } else {
+      setFilters((prev) => ({ ...prev, ...newFilters }));
+    }
+  }, [filters.hub, handleHubQuickSwitch]);
+
+  // Compute filtered & sorted carparks list
+  const filteredCarparks = useMemo(() => {
+    return carparks
+      .filter((cp) => {
+        // Hub filter
+        if (filters.hub !== 'All' && cp.hub !== filters.hub) {
+          return false;
+        }
+
+        // Search query
+        if (filters.searchQuery.trim()) {
+          const q = filters.searchQuery.toLowerCase();
+          const matchName = cp.name.toLowerCase().includes(q);
+          const matchAddr = cp.address.toLowerCase().includes(q);
+          const matchPostal = cp.postalCode.includes(q);
+          if (!matchName && !matchAddr && !matchPostal) {
+            return false;
+          }
+        }
+
+        // Sheltered filter
+        if (filters.shelteredOnly && !cp.isSheltered) {
+          return false;
+        }
+
+        // EV charging filter
+        if (filters.evChargingOnly && !cp.evCharging.available) {
+          return false;
+        }
+
+        // Accessible lots filter
+        if (filters.accessibleLotsOnly && cp.accessibleLots === 0) {
+          return false;
+        }
+
+        // Vehicle clearance filter
+        if (cp.heightClearanceMeters < filters.vehicleHeightMeters) {
+          // Still show if user specifically set high clearance to view warnings, but if heavy vehicle filter is on, exclude
+          if (filters.vehicleType === 'heavy_vehicle') {
+            return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (filters.sortBy === 'lots') {
+          return b.availableLots - a.availableLots;
+        }
+        if (filters.sortBy === 'distance') {
+          return a.walkingDistanceMeters - b.walkingDistanceMeters;
+        }
+        if (filters.sortBy === 'cheapest') {
+          return a.pricing.hourlyEstimate - b.pricing.hourlyEstimate;
+        }
+        if (filters.sortBy === 'clearance') {
+          return b.heightClearanceMeters - a.heightClearanceMeters;
+        }
+        return 0;
+      });
+  }, [carparks, filters]);
+
+  const toggleMute = useCallback(() => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    voiceAlertService.setMuted(nextMuted);
+  }, [isMuted]);
+
+  const testVoiceAlert = useCallback(() => {
+    voiceAlertService.testVoice();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans pb-16">
+      {/* 3-Zone Top Navigation Contract */}
+      <TopNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onTestVoice={testVoiceAlert}
+        onOpenApiHealth={() => setIsApiHealthOpen(true)}
+      />
+
+      {/* Floating Voice Alert Banner & Live Audio Subtitle */}
+      <VoiceAlertBanner
+        isSpeaking={isSpeaking}
+        lastSpokenText={lastSpokenText}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onQuickSwitchToBackup={() => handleSwapBackup(1)}
+        backupName={trackedSlots.backup1?.name}
+        backupLots={trackedSlots.backup1?.availableLots}
+      />
+
+      {/* Sub-header Filter Bar (always accessible for personalised search) */}
+      <FilterBar
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        isOpen={isFilterOpen}
+        onToggleOpen={() => setIsFilterOpen(!isFilterOpen)}
+        carparkCount={filteredCarparks.length}
+      />
+
+      {/* Main Tab Views */}
+      <main className="flex-1 w-full">
+        {activeTab === 'hud' && (
+          <DriverHud
+            trackedSlots={trackedSlots}
+            onSwapBackup={handleSwapBackup}
+            onOpenExplorer={() => setActiveTab('explorer')}
+            onSelectCarparkForDetail={(cp) => setSelectedCarparkForDetail(cp)}
+            tripState={tripState}
+            setTripState={setTripState}
+            userVehicleHeight={filters.vehicleHeightMeters}
+          />
+        )}
+
+        {activeTab === 'explorer' && (
+          <CarparkExplorer
+            carparks={filteredCarparks}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            trackedSlots={trackedSlots}
+            onSetPrimary={handleSetPrimary}
+            onSetBackup={handleSetBackup}
+            onSelectCarparkForDetail={(cp) => setSelectedCarparkForDetail(cp)}
+          />
+        )}
+
+        {activeTab === 'watch' && (
+          <WatchCompanion
+            trackedSlots={trackedSlots}
+            onSwapBackup={handleSwapBackup}
+            onSelectCarparkForDetail={(cp) => setSelectedCarparkForDetail(cp)}
+          />
+        )}
+
+        {activeTab === 'radar' && (
+          <RadarView
+            trackedSlots={trackedSlots}
+            onSwapBackup={handleSwapBackup}
+            onOpenExplorer={() => setActiveTab('explorer')}
+            onSelectCarparkForDetail={(cp) => setSelectedCarparkForDetail(cp)}
+          />
+        )}
+      </main>
+
+      {/* Carpark Detail Tariff & Amenity Modal */}
+      {selectedCarparkForDetail && (
+        <CarparkDetailModal
+          carpark={selectedCarparkForDetail}
+          onClose={() => setSelectedCarparkForDetail(null)}
+          trackedSlots={trackedSlots}
+          onSetPrimary={handleSetPrimary}
+          onSetBackup={handleSetBackup}
+          userVehicleHeight={filters.vehicleHeightMeters}
+        />
+      )}
+
+      {/* Government API Health & Monitoring Modal */}
+      <ApiHealthModal
+        isOpen={isApiHealthOpen}
+        onClose={() => setIsApiHealthOpen(false)}
+      />
+
+      {/* Fixed Ergonomic Bottom Tab Bar (Pattern 1 from Mobile Touch Reference) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 sm:hidden shadow-lg">
+        <div className="grid grid-cols-4 items-center justify-items-center h-12 max-w-md mx-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('hud')}
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] transition-colors ${
+              activeTab === 'hud' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Compass className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">HUD</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('explorer')}
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] transition-colors ${
+              activeTab === 'explorer' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Find</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('watch')}
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] transition-colors ${
+              activeTab === 'watch' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Shield className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Watch</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('radar')}
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] transition-colors ${
+              activeTab === 'radar' ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Volume2 className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Radar</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  );
+}
