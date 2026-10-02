@@ -1,11 +1,6 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { INITIAL_CARPARKS, HUB_DETAILS } from './data/singaporeCarparks';
-import { Carpark, FilterPreferences, TrackedSlots, TripSimulationState, HubZone } from './types/carpark';
+import { Carpark, FilterPreferences, TrackedSlots, TripSimulationState } from './types/carpark';
+import { INITIAL_CARPARKS } from './data/singaporeCarparks';
 import { voiceAlertService } from './services/voiceAlertService';
 import { TopNav } from './components/TopNav';
 import { FilterBar } from './components/FilterBar';
@@ -15,7 +10,8 @@ import { WatchCompanion } from './components/WatchCompanion';
 import { RadarView } from './components/RadarView';
 import { CarparkDetailModal } from './components/CarparkDetailModal';
 import { ApiHealthModal } from './components/ApiHealthModal';
-import { VoiceAlertBanner } from './components/VoiceAlertBanner';
+import { VoiceAlertModal } from './components/VoiceAlertModal';
+import { VoiceAlertIconButton } from './components/VoiceAlertIconButton';
 import { Compass, Volume2, Shield, Sparkles } from 'lucide-react';
 
 export default function App() {
@@ -33,6 +29,9 @@ export default function App() {
 
   // Government API Health modal state
   const [isApiHealthOpen, setIsApiHealthOpen] = useState(false);
+
+  // Hands-Free Voice Alert modal state (opens on user icon press)
+  const [isVoiceAlertModalOpen, setIsVoiceAlertModalOpen] = useState(false);
 
   // Voice speech synthesis status
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -148,92 +147,88 @@ export default function App() {
           return cp;
         })
       );
-    }, 8000); // every 8 seconds
+    }, 4500);
 
     return () => clearInterval(interval);
   }, []);
 
-  // When user switches hub, update tracked slots to the top carparks in that hub
-  const handleHubQuickSwitch = useCallback((newHub: HubZone) => {
-    setFilters((prev) => ({ ...prev, hub: newHub }));
-    if (newHub !== 'All') {
-      const hubCarparks = carparks.filter((c) => c.hub === newHub);
-      if (hubCarparks.length > 0) {
-        setTrackedSlots({
-          primary: hubCarparks[0] || null,
-          backup1: hubCarparks[1] || null,
-          backup2: hubCarparks[2] || null,
-        });
-        voiceAlertService.speak(`Switched tracking destination to ${HUB_DETAILS[newHub].name}. Target is ${hubCarparks[0].name}.`, false);
-      }
-    }
-  }, [carparks]);
-
-  // Promote a backup slot to Primary
-  const handleSwapBackup = useCallback((backupSlot: 1 | 2) => {
+  // Handlers for managing tracked slots
+  const handleSetPrimary = useCallback((carpark: Carpark) => {
     setTrackedSlots((prev) => {
-      const currentPrimary = prev.primary;
-      const targetBackup = backupSlot === 1 ? prev.backup1 : prev.backup2;
+      let newBackup1 = prev.backup1;
+      let newBackup2 = prev.backup2;
 
-      if (!targetBackup) return prev;
-
-      voiceAlertService.speakBackupSwapped(targetBackup.name, targetBackup.availableLots);
-
-      if (backupSlot === 1) {
-        return {
-          primary: targetBackup,
-          backup1: currentPrimary,
-          backup2: prev.backup2,
-        };
-      } else {
-        return {
-          primary: targetBackup,
-          backup1: prev.backup1,
-          backup2: currentPrimary,
-        };
+      // If this carpark was already a backup, clear or shift it
+      if (prev.backup1?.id === carpark.id) {
+        newBackup1 = prev.primary;
+      } else if (prev.backup2?.id === carpark.id) {
+        newBackup2 = prev.primary;
       }
+
+      return {
+        primary: carpark,
+        backup1: newBackup1,
+        backup2: newBackup2,
+      };
     });
 
     setTripState((prev) => ({
       ...prev,
-      lowLotAlertTriggered: false, // Reset low lot trigger for new primary
-    }));
-  }, []);
-
-  // Set explicit carpark as Primary
-  const handleSetPrimary = useCallback((carpark: Carpark) => {
-    setTrackedSlots((prev) => ({
-      ...prev,
-      primary: carpark,
-    }));
-    setTripState((prev) => ({
-      ...prev,
       destinationName: carpark.name,
+      currentEtaMinutes: 12,
+      tenMinAlertTriggered: false,
       lowLotAlertTriggered: false,
     }));
   }, []);
 
-  // Set explicit carpark as Backup 1 or 2
   const handleSetBackup = useCallback((carpark: Carpark, slot: 1 | 2) => {
     setTrackedSlots((prev) => {
       if (slot === 1) {
-        return { ...prev, backup1: carpark };
+        return {
+          ...prev,
+          backup1: carpark,
+          // Prevent duplicates
+          backup2: prev.backup2?.id === carpark.id ? null : prev.backup2,
+        };
       } else {
-        return { ...prev, backup2: carpark };
+        return {
+          ...prev,
+          backup2: carpark,
+          // Prevent duplicates
+          backup1: prev.backup1?.id === carpark.id ? null : prev.backup1,
+        };
       }
     });
   }, []);
 
-  // Filter preferences update handler
-  const handleFilterChange = useCallback((newFilters: Partial<FilterPreferences>) => {
-    if (newFilters.hub !== undefined && newFilters.hub !== filters.hub) {
-      handleHubQuickSwitch(newFilters.hub);
-    } else {
-      setFilters((prev) => ({ ...prev, ...newFilters }));
-    }
-  }, [filters.hub, handleHubQuickSwitch]);
+  const handleSwapBackup = useCallback((backupIndex: 1 | 2) => {
+    setTrackedSlots((prev) => {
+      if (backupIndex === 1 && prev.backup1) {
+        return {
+          primary: prev.backup1,
+          backup1: prev.primary,
+          backup2: prev.backup2,
+        };
+      }
+      if (backupIndex === 2 && prev.backup2) {
+        return {
+          primary: prev.backup2,
+          backup1: prev.backup1,
+          backup2: prev.primary,
+        };
+      }
+      return prev;
+    });
+  }, []);
 
-  // Compute filtered & sorted carparks list
+  const handleFilterChange = useCallback((newFilters: Partial<FilterPreferences>) => {
+    setFilters((prev) => {
+      const updated = { ...prev, ...newFilters };
+      return updated;
+    });
+  }, []);
+
+  // Filter and sort carparks list
   const filteredCarparks = useMemo(() => {
     return carparks
       .filter((cp) => {
@@ -242,9 +237,9 @@ export default function App() {
           return false;
         }
 
-        // Search query
+        // Search query filter
         if (filters.searchQuery.trim()) {
-          const q = filters.searchQuery.toLowerCase();
+          const q = filters.searchQuery.toLowerCase().trim();
           const matchName = cp.name.toLowerCase().includes(q);
           const matchAddr = cp.address.toLowerCase().includes(q);
           const matchPostal = cp.postalCode.includes(q);
@@ -270,7 +265,6 @@ export default function App() {
 
         // Vehicle clearance filter
         if (cp.heightClearanceMeters < filters.vehicleHeightMeters) {
-          // Still show if user specifically set high clearance to view warnings, but if heavy vehicle filter is on, exclude
           if (filters.vehicleType === 'heavy_vehicle') {
             return false;
           }
@@ -305,6 +299,10 @@ export default function App() {
     voiceAlertService.testVoice();
   }, []);
 
+  const hasRecentUrgentAlert = Boolean(
+    lastSpokenText && (lastSpokenText.toLowerCase().includes('alert') || lastSpokenText.toLowerCase().includes('drop'))
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans pb-16">
       {/* 3-Zone Top Navigation Contract */}
@@ -312,21 +310,10 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isMuted={isMuted}
-        onToggleMute={toggleMute}
-        onTestVoice={testVoiceAlert}
-        onOpenApiHealth={() => setIsApiHealthOpen(true)}
-      />
-
-      {/* Floating Voice Alert Banner & Live Audio Subtitle */}
-      <VoiceAlertBanner
         isSpeaking={isSpeaking}
-        lastSpokenText={lastSpokenText}
-        isMuted={isMuted}
         onToggleMute={toggleMute}
-        onQuickSwitchToBackup={() => handleSwapBackup(1)}
-        onDismiss={() => setLastSpokenText(null)}
-        backupName={trackedSlots.backup1?.name}
-        backupLots={trackedSlots.backup1?.availableLots}
+        onOpenVoiceAlert={() => setIsVoiceAlertModalOpen(true)}
+        onOpenApiHealth={() => setIsApiHealthOpen(true)}
       />
 
       {/* Sub-header Filter Bar (always accessible for personalised search) */}
@@ -400,8 +387,32 @@ export default function App() {
         onClose={() => setIsApiHealthOpen(false)}
       />
 
+      {/* Hands-Free Voice Alert Modal (Opened when user presses the Voice Alert Icon) */}
+      <VoiceAlertModal
+        isOpen={isVoiceAlertModalOpen}
+        onClose={() => setIsVoiceAlertModalOpen(false)}
+        isSpeaking={isSpeaking}
+        lastSpokenText={lastSpokenText}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        onQuickSwitchToBackup={() => handleSwapBackup(1)}
+        onTestVoice={testVoiceAlert}
+        backupName={trackedSlots.backup1?.name}
+        backupLots={trackedSlots.backup1?.availableLots}
+        primaryName={trackedSlots.primary?.name}
+        primaryLots={trackedSlots.primary?.availableLots}
+      />
+
+      {/* Hands-Free Voice Alert Icon Button (Press to view/replay voice alerts) */}
+      <VoiceAlertIconButton
+        isSpeaking={isSpeaking}
+        isMuted={isMuted}
+        hasRecentAlert={hasRecentUrgentAlert}
+        onClick={() => setIsVoiceAlertModalOpen(true)}
+      />
+
       {/* Fixed Ergonomic Bottom Tab Bar (Pattern 1 from Mobile Touch Reference) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 sm:hidden shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 sm:hidden shadow-lg">
         <div className="grid grid-cols-4 items-center justify-items-center h-12 max-w-md mx-auto">
           <button
             type="button"
