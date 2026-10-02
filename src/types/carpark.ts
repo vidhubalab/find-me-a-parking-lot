@@ -1,4 +1,16 @@
-export type HubZone = 'Orchard' | 'Marina' | 'HarbourFront' | 'JurongLake' | 'All';
+export type HubZone =
+  | 'All'
+  | 'Orchard'
+  | 'Marina'
+  | 'CBD'
+  | 'Bugis'
+  | 'East'
+  | 'West'
+  | 'North'
+  | 'NorthEast'
+  | 'Central'
+  | 'HarbourFront'
+  | 'JurongLake';
 
 export type VehicleType = 'car' | 'motorcycle' | 'heavy_vehicle';
 
@@ -22,6 +34,8 @@ export interface Carpark {
   id: string;
   name: string;
   hub: HubZone;
+  town?: string; // e.g. "Tampines", "Woodlands", "Jurong East", "Bedok", "Punggol"
+  uraCode?: string; // e.g. "N0006", "A0004", "TP12"
   address: string;
   postalCode: string;
   latitude: number;
@@ -32,7 +46,7 @@ export interface Carpark {
   historicalCrowd: 'light' | 'moderate' | 'heavy' | 'critical';
   isSheltered: boolean;
   heightClearanceMeters: number; // e.g. 2.1
-  walkingDistanceMeters: number; // to primary hub anchor
+  walkingDistanceMeters: number; // to primary destination / MRT / hub anchor
   walkingTimeMinutes: number;
   pricing: PricingRate;
   evCharging: EVChargerInfo;
@@ -63,10 +77,8 @@ export interface VoiceAlertSettings {
   enabled: boolean;
   tenMinuteAlertEnabled: boolean;
   lowLotAlertEnabled: boolean;
-  lowLotThreshold: number; // defaults to 10
-  speechRate: number; // 1.0
-  volume: number; // 1.0
-  voiceGender: 'female' | 'male' | 'system';
+  thresholdLots: number; // default: 10 lots
+  voiceSpeed: number; // 0.9 to 1.2
 }
 
 export interface TripSimulationState {

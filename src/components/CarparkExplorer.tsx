@@ -45,7 +45,7 @@ export const CarparkExplorer: React.FC<CarparkExplorerProps> = ({
           type="text"
           value={filters.searchQuery}
           onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
-          placeholder="Search by destination (e.g. ION, MBS, VivoCity, JEM, IMM, Takashimaya)..."
+          placeholder="Search across all Singapore (e.g. Tampines, Woodlands, Jurong, Bedok, Punggol, ION, MBS)..."
           className="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-sm transition-colors"
         />
         {filters.searchQuery && (
@@ -128,8 +128,13 @@ export const CarparkExplorer: React.FC<CarparkExplorerProps> = ({
                   <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] font-bold text-slate-500">
-                        {carpark.hub}
+                        {carpark.town ? `${carpark.town} · ${carpark.hub}` : carpark.hub}
                       </span>
+                      {carpark.uraCode && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-slate-100 text-slate-600 rounded border border-slate-200">
+                          {carpark.uraCode}
+                        </span>
+                      )}
                       {isPrimary && (
                         <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md">
                           Primary Target

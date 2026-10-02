@@ -40,7 +40,7 @@ export default function App() {
 
   // Filter preferences state
   const [filters, setFilters] = useState<FilterPreferences>({
-    hub: 'Orchard',
+    hub: 'All',
     searchQuery: '',
     vehicleType: 'car',
     vehicleHeightMeters: 1.9,
@@ -243,7 +243,10 @@ export default function App() {
           const matchName = cp.name.toLowerCase().includes(q);
           const matchAddr = cp.address.toLowerCase().includes(q);
           const matchPostal = cp.postalCode.includes(q);
-          if (!matchName && !matchAddr && !matchPostal) {
+          const matchTown = cp.town ? cp.town.toLowerCase().includes(q) : false;
+          const matchHub = cp.hub.toLowerCase().includes(q);
+          const matchUra = cp.uraCode ? cp.uraCode.toLowerCase().includes(q) : false;
+          if (!matchName && !matchAddr && !matchPostal && !matchTown && !matchHub && !matchUra) {
             return false;
           }
         }
