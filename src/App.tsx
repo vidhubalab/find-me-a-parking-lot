@@ -324,6 +324,7 @@ export default function App() {
         isMuted={isMuted}
         onToggleMute={toggleMute}
         onQuickSwitchToBackup={() => handleSwapBackup(1)}
+        onDismiss={() => setLastSpokenText(null)}
         backupName={trackedSlots.backup1?.name}
         backupLots={trackedSlots.backup1?.availableLots}
       />

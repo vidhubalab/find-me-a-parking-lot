@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, AlertTriangle, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, AlertTriangle, Sparkles, X } from 'lucide-react';
 import { voiceAlertService } from '../services/voiceAlertService';
 
 interface VoiceAlertBannerProps {
@@ -8,6 +8,7 @@ interface VoiceAlertBannerProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onQuickSwitchToBackup?: () => void;
+  onDismiss?: () => void;
   backupName?: string;
   backupLots?: number;
 }
@@ -18,6 +19,7 @@ export const VoiceAlertBanner: React.FC<VoiceAlertBannerProps> = ({
   isMuted,
   onToggleMute,
   onQuickSwitchToBackup,
+  onDismiss,
   backupName,
   backupLots,
 }) => {
@@ -29,15 +31,15 @@ export const VoiceAlertBanner: React.FC<VoiceAlertBannerProps> = ({
     <div
       role="region"
       aria-label="Voice announcement notification"
-      className={`fixed top-16 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 transition-all duration-300 transform ${
+      className={`fixed bottom-20 sm:bottom-6 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-50 transition-all duration-300 transform ${
         isSpeaking ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-95'
       }`}
     >
       <div
-        className={`p-3.5 rounded-2xl shadow-xl backdrop-blur-xl border ${
+        className={`p-3.5 rounded-2xl shadow-2xl backdrop-blur-xl border ${
           isUrgent
-            ? 'bg-rose-50 border-rose-300 text-rose-900 shadow-rose-950/10'
-            : 'bg-white border-emerald-300 text-slate-900 shadow-slate-900/10'
+            ? 'bg-rose-50 border-rose-300 text-rose-900 shadow-rose-950/20'
+            : 'bg-white border-emerald-300 text-slate-900 shadow-slate-900/15'
         }`}
       >
         <div className="flex items-start gap-3">
@@ -84,14 +86,29 @@ export const VoiceAlertBanner: React.FC<VoiceAlertBannerProps> = ({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={onToggleMute}
-            aria-label={isMuted ? 'Unmute voice alerts' : 'Mute voice alerts'}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-600" /> : <Volume2 className="w-4 h-4 text-slate-600" />}
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onToggleMute}
+              aria-label={isMuted ? 'Unmute voice alerts' : 'Mute voice alerts'}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              title={isMuted ? 'Unmute voice alerts' : 'Mute voice alerts'}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 text-rose-600" /> : <Volume2 className="w-4 h-4 text-slate-600" />}
+            </button>
+
+            {onDismiss && (
+              <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Dismiss voice alert"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
